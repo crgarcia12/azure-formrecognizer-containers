@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: studio
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 5001
+  selector:
+    app: studio
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: studio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: studio
+  template:
+    metadata:
+      labels:
+        app: studio
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: studio
+        image: mcr.microsoft.com/azure-cognitive-services/form-recognizer/studio:3.0
+        env:
+          - name: "AZURECOGNITIVESERVICELAYOUTHOST"
+            value: "https://formrecognizer-ns.formrecognizer.svc.cluster.local:5001"
+          - name: "ONPREM_LOCALFILE_BASEPATH"
+            value: "/onprem_folder"
+          - name: "STORAGE_DATABASE_CONNECTION_STRING"
+            value: "/onprem_db/Application.db"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5001
+        volumeMounts:
+        - name: folder-volume
+          mountPath: "/onprem_folder"
+        - name: db-volume
+          mountPath: "/onprem_db"
+      volumes:
+      - name: folder-volume
+        persistentVolumeClaim:
+          claimName: studio-folder-claim
+      - name: db-volume
+        persistentVolumeClaim:
+          claimName: studio-db-claim
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: studio-folder-claim
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: azurefile-csi
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: studio-db-claim
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: managed-csi
+  resources:
+    requests:
+      storage: 1Gi
+---
