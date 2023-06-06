@@ -7,6 +7,10 @@ spec:
   ports:
   - port: 80
     targetPort: 5001
+  - port: 5000
+    targetPort: 5000
+  - port: 5001
+    targetPort: 5001
   selector:
     app: studio
 ---
@@ -47,6 +51,58 @@ spec:
           mountPath: "/onprem_folder"
         - name: db-volume
           mountPath: "/onprem_db"
+      - name: layout
+        image: mcr.microsoft.com/azure-cognitive-services/form-recognizer/layout
+        env:
+          - name: "EULA"
+            value: "accept"
+          - name: "billing"
+            value: "https://crgar-formrecognizer-fr.cognitiveservices.azure.com/"
+          - name: "key"
+            value: "<Key>"
+          - name : "Logging:Console:LogLevel:Default"
+            value: "Information"
+          - name : "SharedRootFolder" 
+            value: "/shared"
+          - name : "Mounts:Shared" 
+            value: "/shared"
+          - name : "Mounts:Output"
+            value: "/logs"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5001
+        volumeMounts:
+        - name: shared
+          mountPath: "/shared"
+        - name: output
+          mountPath: "/output"
+      - name: layout
+        image: mcr.microsoft.com/azure-cognitive-services/form-recognizer/custom-template-3.0:latest
+        env:
+          - name: "AzureCognitiveServiceLayoutHost"
+            value: "http://azure-cognitive-service-layout:5000"
+          - name: "EULA"
+            value: "accept"
+          - name: "billing"
+            value: "https://crgar-formrecognizer-fr.cognitiveservices.azure.com/"
+          - name: "key"
+            value: "<key>"
+          - name : "Logging:Console:LogLevel:Default"
+            value: "Information"
+          - name : "SharedRootFolder" 
+            value: "/shared"
+          - name : "Mounts:Shared" 
+            value: "/shared"
+          - name : "Mounts:Output"
+            value: "/logs"
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5001
+        volumeMounts:
+        - name: shared
+          mountPath: "/shared"
+        - name: output
+          mountPath: "/output"
       volumes:
       - name: folder-volume
         persistentVolumeClaim:
@@ -54,6 +110,15 @@ spec:
       - name: db-volume
         persistentVolumeClaim:
           claimName: studio-db-claim
+            - name: layout
+      - name: shared
+        persistentVolumeClaim:
+          claimName: shared
+            - name: layout
+      - name: output
+        persistentVolumeClaim:
+          claimName: output
+            - name: layout
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -79,32 +144,26 @@ spec:
     requests:
       storage: 1Gi
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: PersistentVolumeClaim
 metadata:
-  name: layout
+    name: shared
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: layout
-  template:
-    metadata:
-      labels:
-        app: layout
-    spec:
-      securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroup: 1000
-      containers:
-      - name: layout
-        image: mcr.microsoft.com/azure-cognitive-services/form-recognizer/layout
-        env:
-          - name: "EULA"
-            value: "accept"
-          - name: "billing"
-            value: "https://crgar-formrecognizer-fr.cognitiveservices.azure.com/"
-        imagePullPolicy: Always
-        ports:
-        - containerPort: 5001
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: azurefile-csi
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: output
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: azurefile-csi
+  resources:
+    requests:
+      storage: 1Gi
